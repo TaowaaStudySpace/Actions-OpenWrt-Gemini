@@ -18,3 +18,4 @@
 
 # Modify hostname
 #sed -i 's/OpenWrt/P3TERX-Router/g' package/base-files/files/bin/config_generate
+echo 'https://github.com/unifreq/openwrt-mainline-kernel' > FLIPPY_REPO_URL
