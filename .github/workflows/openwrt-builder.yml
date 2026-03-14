@@ -134,6 +134,15 @@ jobs:
         [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
 
+    - name: Package Armvirt as OpenWrt
+      uses: unifreq/openwrt-aarch64@main
+      with:
+        install_program: 'n1'
+        # 这里的路径一定要对应你编译出来的 tar.gz 位置
+        openwrt_armvirt: bin/targets/amlogic/meson/openwrt-amlogic-meson-generic-rootfs.tar.gz
+        # 设置内核版本，通常用 6.1.x 或 5.15.x，flippy 脚本会自动选择
+        kernel_version_compiler: '6.1.x'
+        
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
       if: steps.tag.outputs.status == 'success' && !cancelled()
