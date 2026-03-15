@@ -4,17 +4,17 @@
 # File: .github/workflows/openwrt-bulder.yml
 # Description: Build OpenWrt using GitHub Actions
 #
-# Copyright (c) 2019-2024 P3TERX <https://p3terx.com>
-#
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
 
 name: OpenWrt Builder
 
 on:
   repository_dispatch:
   workflow_dispatch:
+
+# 【修复 403 报错】：赋予 Action 读写 Release 的最高权限
+permissions:
+  contents: write
+  actions: write
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
@@ -102,13 +102,6 @@ jobs:
       if: (!cancelled())
       run: df -hT
 
-    - name: Upload bin directory
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
-
     - name: Organize files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
@@ -117,6 +110,23 @@ jobs:
         rm -rf packages
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
         echo "status=success" >> $GITHUB_OUTPUT
+
+    - name: Package N1 Image
+      if: steps.organize.outputs.status == 'success' && !cancelled()
+      working-directory: /workdir
+      run: |
+        # 下载 ophub 打包工具
+        git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-armbian.git amlogic
+        # 准备 rootfs
+        mkdir -p amlogic/openwrt
+        # 【修复找不到文件报错】：使用 $FIRMWARE 动态环境变量，绝对不会找错路径
+        cp $FIRMWARE/*rootfs.tar.gz amlogic/openwrt/rootfs.tar.gz
+        # 执行打包
+        cd amlogic
+        sudo ./build.sh -m n1 -k 6.1.100 -b openwrt
+        # 将打包好的 .img 镜像送回产物目录
+        cp out/*.img $FIRMWARE/
+        echo "PACKAGED_STATUS=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware directory
       uses: actions/upload-artifact@main
@@ -131,28 +141,9 @@ jobs:
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
-        [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
+        echo "🎉 Phicomm N1 OpenWrt 编译成功！包含 Docker 环境。" >> release.txt
         echo "status=success" >> $GITHUB_OUTPUT
-        
-    - name: Package N1 Image
-      run: |
-        # 1. 下载 ophub 提供的打包脚本
-        git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-armbian.git amlogic
-        
-        # 2. 准备文件目录
-        mkdir -p amlogic/openwrt
-        # 将你刚才编译出来的 rootfs 拷贝并改名为 rootfs.tar.gz
-        cp bin/targets/amlogic/meson/*.tar.gz amlogic/openwrt/rootfs.tar.gz
-        
-        # 3. 执行打包脚本
-        # -m 指定设备为 n1, -k 指定内核（这里可以用最新的 6.1 或 6.6）
-        cd amlogic
-        sudo ./build.sh -m n1 -k 6.1.100 -b openwrt
-        
-        # 4. 整理产物
-        mkdir -p ../bin/targets/amlogic/meson/out
-        cp out/*.img ../bin/targets/amlogic/meson/out/
-        
+
     - name: Upload firmware to release
       uses: softprops/action-gh-release@master
       if: steps.tag.outputs.status == 'success' && !cancelled()
