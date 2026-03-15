@@ -115,17 +115,19 @@ jobs:
       if: steps.organize.outputs.status == 'success' && !cancelled()
       working-directory: /workdir
       run: |
-        # 下载 ophub 打包工具
-        git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-armbian.git amlogic
-        # 准备 rootfs
-        mkdir -p amlogic/openwrt
-        # 【修复找不到文件报错】：使用 $FIRMWARE 动态环境变量，绝对不会找错路径
-        cp $FIRMWARE/*rootfs.tar.gz amlogic/openwrt/rootfs.tar.gz
-        # 执行打包
-        cd amlogic
-        sudo ./build.sh -m n1 -k 6.1.100 -b openwrt
-        # 将打包好的 .img 镜像送回产物目录
-        cp out/*.img $FIRMWARE/
+        # 1. 下载 ophub 专门针对 OpenWrt 的打包工具（这次绝对不会错了）
+        git clone --depth 1 https://github.com/ophub/amlogic-s9xxx-openwrt.git amlogic-pack
+        
+        # 2. 准备打包环境（脚本规定要把核心包放进 openwrt-armvirt 文件夹）
+        cd amlogic-pack
+        mkdir -p openwrt-armvirt
+        cp $FIRMWARE/*rootfs.tar.gz openwrt-armvirt/
+        
+        # 3. 执行终极打包命令 (-d: 默认参数, -b: 指定斐讯N1所属的s905d架构, -k: 注入稳定的 6.1 内核)
+        sudo ./make -d -b s905d -k 6.1.100
+        
+        # 4. 将新鲜出炉的 .img 镜像送回发货目录
+        cp out/*/*.img $FIRMWARE/ || cp out/*.img $FIRMWARE/
         echo "PACKAGED_STATUS=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware directory
